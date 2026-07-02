@@ -32,9 +32,30 @@ def parse_mnist(image_filename, label_filename):
                 labels of the examples.  Values should be of type np.int8 and
                 for MNIST will contain the values 0-9.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    ### BEGIN YOUR CODE
+
+    # 读取图像文件
+    with gzip.open(image_filename, 'rb') as f:
+        # 读取魔数、图像数量、行数、列数
+        magic = int.from_bytes(f.read(4), 'big')
+        num_images = int.from_bytes(f.read(4), 'big')
+        rows = int.from_bytes(f.read(4), 'big')
+        cols = int.from_bytes(f.read(4), 'big')
+        # 读取图像数据，并转换为float32
+        X = np.frombuffer(f.read(), dtype=np.uint8).reshape(num_images, rows * cols).astype(np.float32)
+        # 归一化到[0.0, 1.0]
+        X = X / 255.0
+
+    # 读取标签文件
+    with gzip.open(label_filename, 'rb') as f:
+        # 读取魔数和标签数量
+        magic = int.from_bytes(f.read(4), 'big')
+        num_labels = int.from_bytes(f.read(4), 'big')
+        # 读取标签数据，保持uint8类型
+        y = np.frombuffer(f.read(), dtype=np.uint8)
+
+    return X, y
+    ### END YOUR CODE
 
 
 def softmax_loss(Z, y_one_hot):
@@ -53,9 +74,21 @@ def softmax_loss(Z, y_one_hot):
     Returns:
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    ### BEGIN YOUR CODE
+    # 计算 log-sum-exp: log(sum(exp(Z_i))) 对每个样本
+    # axis=1 表示对每个样本的类别维度求和
+    log_sum_exp = ndl.log(ndl.summation(ndl.exp(Z), axes=1))
+    log_sum_exp = ndl.reshape(log_sum_exp, (Z.shape[0], 1))
+    log_sum_exp = ndl.broadcast_to(log_sum_exp, Z.shape)
+    log_softmax = Z - log_sum_exp
+    
+    # 交叉熵损失：-sum(y_one_hot * log_softmax)
+    loss_per_sample = -ndl.summation(y_one_hot * log_softmax, axes=1)
+    
+    # 返回平均损失
+    return ndl.summation(loss_per_sample) / Z.shape[0]
     ### END YOUR SOLUTION
+
 
 
 def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
@@ -82,9 +115,27 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
             W2: ndl.Tensor[np.float32]
     """
 
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    ### BEGIN YOUR CODE
+    num_examples = X.shape[0]
+    num_classes = W2.shape[1]
+
+    for i in range(0, num_examples, batch):
+        X_batch = ndl.Tensor(X[i : i + batch])
+        y_batch = y[i : i + batch]
+
+        y_one_hot = np.zeros((y_batch.shape[0], num_classes), dtype=np.float32)
+        y_one_hot[np.arange(y_batch.shape[0]), y_batch] = 1
+        y_batch_tensor = ndl.Tensor(y_one_hot)
+
+        logits = ndl.relu(X_batch @ W1) @ W2
+        loss = softmax_loss(logits, y_batch_tensor)
+        loss.backward()
+
+        W1 = ndl.Tensor(W1.numpy() - lr * W1.grad.numpy())
+        W2 = ndl.Tensor(W2.numpy() - lr * W2.grad.numpy())
+
+    return W1, W2
+    ### END YOUR CODE
 
 
 ### CODE BELOW IS FOR ILLUSTRATION, YOU DO NOT NEED TO EDIT

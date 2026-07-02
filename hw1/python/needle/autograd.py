@@ -369,18 +369,27 @@ def compute_gradient_of_variables(output_tensor, out_grad):
 
     Store the computed result in the grad field of each Variable.
     """
-    # a map from node to a list of gradient contributions from each output node
     node_to_output_grads_list: Dict[Tensor, List[Tensor]] = {}
-    # Special note on initializing gradient of
-    # We are really taking a derivative of the scalar reduce_sum(output_node)
-    # instead of the vector output_node. But this is the common case for loss function.
     node_to_output_grads_list[output_tensor] = [out_grad]
 
-    # Traverse graph in reverse topological order given the output_node that we are taking gradient wrt.
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    for node in reverse_topo_order:
+        if node not in node_to_output_grads_list:
+            continue
+
+        node_grad = sum_node_list(node_to_output_grads_list[node])
+        node.grad = node_grad
+
+        if node.op is None:
+            continue
+
+        input_grads = node.op.gradient_as_tuple(node_grad, node)
+        for input_node, input_grad in zip(node.inputs, input_grads):
+            if input_node not in node_to_output_grads_list:
+                node_to_output_grads_list[input_node] = []
+            node_to_output_grads_list[input_node].append(input_grad)
     ### END YOUR SOLUTION
 
 
@@ -393,14 +402,35 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     sort.
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    visited = set()
+    topo_order = []
+    
+    # 对每个节点执行DFS
+    for node in node_list:
+        topo_sort_dfs(node, visited, topo_order)
+    
+    return topo_order
     ### END YOUR SOLUTION
 
 
 def topo_sort_dfs(node, visited, topo_order):
     """Post-order DFS"""
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    # 如果节点已经访问过，直接返回
+    if node in visited:
+        return
+    
+    # 标记当前节点为已访问
+    visited.add(node)
+    
+    # 递归遍历所有输入节点（依赖项）
+    # 注意：需要检查节点是否有 inputs 属性
+    if hasattr(node, 'inputs'):
+        for input_node in node.inputs:
+            topo_sort_dfs(input_node, visited, topo_order)
+    
+    # 后序添加：在所有依赖节点之后添加当前节点
+    topo_order.append(node)
     ### END YOUR SOLUTION
 
 

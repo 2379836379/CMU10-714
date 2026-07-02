@@ -33,7 +33,92 @@ void softmax_regression_epoch_cpp(const float *X, const unsigned char *y,
      */
 
     /// BEGIN YOUR CODE
-
+    // 遍历每个批次
+    for (size_t i = 0; i < m; i += batch) {
+        // 当前批次的实际大小（最后一个批次可能小于batch）
+        size_t batch_size = std::min(batch, m - i);
+        
+        // ========== 分配临时数组 ==========
+        // logits: (batch_size, k)
+        float *logits = new float[batch_size * k]();
+        // probs: (batch_size, k) - softmax概率
+        float *probs = new float[batch_size * k]();
+        // I_y: (batch_size, k) - one-hot标签
+        float *I_y = new float[batch_size * k]();
+        // grad: (n, k) - 梯度
+        float *grad = new float[n * k]();
+        
+        // ========== 前向传播：计算logits = X_batch @ theta ==========
+        // 对于批次中的每个样本
+        for (size_t j = 0; j < batch_size; j++) {
+            // 对于每个类别
+            for (size_t c = 0; c < k; c++) {
+                float sum = 0.0f;
+                // 对于每个特征维度
+                for (size_t d = 0; d < n; d++) {
+                    // X[i+j, d] * theta[d, c]
+                    sum += X[(i + j) * n + d] * theta[d * k + c];
+                }
+                logits[j * k + c] = sum;
+            }
+        }
+        
+        // ========== 计算Softmax概率 ==========
+        for (size_t j = 0; j < batch_size; j++) {
+            // 找到当前样本的最大logit值（数值稳定）
+            float max_logit = logits[j * k];
+            for (size_t c = 1; c < k; c++) {
+                if (logits[j * k + c] > max_logit) {
+                    max_logit = logits[j * k + c];
+                }
+            }
+            
+            // 计算exp并求和
+            float sum_exp = 0.0f;
+            for (size_t c = 0; c < k; c++) {
+                probs[j * k + c] = expf(logits[j * k + c] - max_logit);
+                sum_exp += probs[j * k + c];
+            }
+            
+            // 归一化得到概率
+            for (size_t c = 0; c < k; c++) {
+                probs[j * k + c] /= sum_exp;
+            }
+        }
+        
+        // ========== 创建One-Hot标签矩阵 ==========
+        for (size_t j = 0; j < batch_size; j++) {
+            // 获取当前样本的真实标签
+            unsigned char label = y[i + j];
+            // 设置对应位置为1
+            I_y[j * k + label] = 1.0f;
+        }
+        
+        // ========== 计算梯度 ==========
+        // grad = (1/batch_size) * X_batch^T @ (probs - I_y)
+        for (size_t d = 0; d < n; d++) {
+            for (size_t c = 0; c < k; c++) {
+                float sum = 0.0f;
+                for (size_t j = 0; j < batch_size; j++) {
+                    // X[i+j, d] * (probs[j, c] - I_y[j, c])
+                    sum += X[(i + j) * n + d] * (probs[j * k + c] - I_y[j * k + c]);
+                }
+                grad[d * k + c] = sum / batch_size;
+            }
+        }
+        
+        // ========== 更新参数 ==========
+        // theta = theta - lr * grad
+        for (size_t j = 0; j < n * k; j++) {
+            theta[j] -= lr * grad[j];
+        }
+        
+        // ========== 释放临时数组 ==========
+        delete[] logits;
+        delete[] probs;
+        delete[] I_y;
+        delete[] grad;
+    }
     /// END YOUR CODE
 }
 

@@ -48,7 +48,7 @@ def parse_mnist(image_filename, label_filename):
                 for MNIST will contain the values 0-9.
     """
     ### BEGIN YOUR CODE
-    
+
     # 读取图像文件
     with gzip.open(image_filename, 'rb') as f:
         # 读取魔数、图像数量、行数、列数
@@ -89,7 +89,15 @@ def softmax_loss(Z, y):
         Average softmax loss over the sample.
     """
     ### BEGIN YOUR CODE
-    pass
+    z_y = Z[np.arange(len(y)), y]
+    
+    # 计算 log-sum-exp: log(sum(exp(Z_i))) 对每个样本
+    # axis=1 表示对每个样本的类别维度求和
+    log_sum_exp = np.log(np.sum(np.exp(Z), axis=1))
+    # 计算每个样本的损失: log_sum_exp - z_y
+    # 然后取平均值
+    loss = np.mean(log_sum_exp - z_y)
+    return loss
     ### END YOUR CODE
 
 
@@ -111,8 +119,31 @@ def softmax_regression_epoch(X, y, theta, lr = 0.1, batch=100):
     Returns:
         None
     """
+
     ### BEGIN YOUR CODE
-    pass
+    m = X.shape[0]  # 样本数量
+    # 按顺序遍历批次（不随机打乱）
+    for i in range(0, m, batch):
+        # 获取当前批次的样本
+        X_batch = X[i:i+batch]  # (batch_size, input_dim)
+        y_batch = y[i:i+batch]  # (batch_size,)
+    
+        # 前向传播：计算logits
+        logits = X_batch @ theta  # (batch_size, num_classes)
+        # 计算softmax概率（数值稳定版本）
+        # 减去每个样本的最大值防止溢出
+        logits_stable = logits - np.max(logits, axis=1, keepdims=True)
+        exp_logits = np.exp(logits_stable)
+        Z = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)  # (batch_size, num_classes)
+        # 创建one-hot标签矩阵
+        batch_size = len(y_batch)
+        I_y = np.zeros((batch_size, Z.shape[1]), dtype=np.float32)
+        I_y[np.arange(batch_size), y_batch] = 1.0
+        # 计算梯度：grad = (1/batch) * X_batch^T @ (Z - I_y)
+        grad = (X_batch.T @ (Z - I_y)) / batch_size  # (input_dim, num_classes)
+        
+        # 更新参数（梯度下降）
+        theta -= lr * grad
     ### END YOUR CODE
 
 
@@ -139,7 +170,45 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    m = X.shape[0]  # 样本数量
+    for i in range(0, m, batch):
+        # 获取当前批次
+        X_batch = X[i:i+batch]  # (batch_size, input_dim)
+        y_batch = y[i:i+batch]  # (batch_size,)
+        batch_size = len(y_batch)
+        
+        # ========== 前向传播 ==========
+        # 第一层：Z1 = ReLU(X W1)
+        Z1 = np.maximum(0, X_batch @ W1)  # (batch_size, hidden_dim)
+        # 第二层：logits = Z1 W2
+        logits = Z1 @ W2  # (batch_size, num_classes)
+        
+        # ========== Softmax概率 ==========
+        # 数值稳定：减去最大值
+        logits_stable = logits - np.max(logits, axis=1, keepdims=True)
+        exp_logits = np.exp(logits_stable)
+        probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)  # (batch_size, num_classes)
+        
+        # ========== 反向传播 ==========
+        # One-hot标签矩阵
+        I_y = np.zeros((batch_size, probs.shape[1]), dtype=np.float32)
+        I_y[np.arange(batch_size), y_batch] = 1.0
+        
+        # G2 = probs - I_y (输出层误差)
+        G2 = probs - I_y  # (batch_size, num_classes)
+        
+        # W2的梯度: dW2 = (1/batch) * Z1^T @ G2
+        dW2 = (Z1.T @ G2) / batch_size  # (hidden_dim, num_classes)
+        
+        # G1 = ReLU导数 * (G2 @ W2^T) (隐藏层误差)
+        relu_grad = (Z1 > 0).astype(np.float32)  # (batch_size, hidden_dim)
+        G1 = relu_grad * (G2 @ W2.T)  # (batch_size, hidden_dim)
+        
+        # W1的梯度: dW1 = (1/batch) * X^T @ G1
+        dW1 = (X_batch.T @ G1) / batch_size  # (input_dim, hidden_dim)
+        # ========== 参数更新 ==========
+        W1 -= lr * dW1
+        W2 -= lr * dW2
     ### END YOUR CODE
 
 

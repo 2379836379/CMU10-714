@@ -11,6 +11,7 @@ class Parameter(Tensor):
     """A special kind of tensor that represents parameters."""
 
 
+
 def _unpack_params(value: object) -> list[Tensor]:
     if isinstance(value, Parameter):
         return [value]
@@ -28,6 +29,7 @@ def _unpack_params(value: object) -> list[Tensor]:
         return params
     else:
         return []
+
 
 
 def _child_modules(value: object) -> list["Module"]:
@@ -86,9 +88,14 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        self.weight = Parameter(init.kaiming_uniform(in_features, out_features, device=device, dtype=dtype))
+        self.weight = Parameter(
+            init.kaiming_uniform(in_features, out_features, device=device, dtype=dtype)
+        )
         if bias:
-            self.bias = Parameter(init.kaiming_uniform(out_features, 1, device=device, dtype=dtype).reshape((1, out_features)))
+            self.bias = Parameter(
+                init.kaiming_uniform(out_features, 1, device=device, dtype=dtype)
+                .reshape((1, out_features))
+            )
         else:
             self.bias = None
         ### END YOUR SOLUTION
@@ -105,15 +112,11 @@ class Linear(Module):
 class Flatten(Module):
     def forward(self, X: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        # 获取输入张量的形状
-        batch_size = X.shape[0]  # 第一个维度是 batch size
-        # 计算剩余维度的元素总数
-        flatten_dim = 1
+        batch = X.shape[0]
+        size = 1
         for dim in X.shape[1:]:
-            flatten_dim *= dim
-        # 将除 batch 维度外的所有维度展平
-        # 使用 reshape 操作：[batch, ...] -> [batch, flatten_dim]
-        return X.reshape((batch_size, flatten_dim))
+            size *= dim
+        return ops.reshape(X, (batch, size))
         ### END YOUR SOLUTION
 
 
@@ -123,6 +126,7 @@ class ReLU(Module):
         return ops.relu(x)
         ### END YOUR SOLUTION
 
+
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
         super().__init__()
@@ -130,17 +134,19 @@ class Sequential(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        in_module = x
         for module in self.modules:
-            in_module = module.forward(in_module)
+            x = module(x)
+        return x
         ### END YOUR SOLUTION
-        return in_module
 
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        num_classes = logits.shape[1]
+        y_one_hot = init.one_hot(num_classes, y, device=logits.device, dtype=logits.dtype)
+        losses = ops.logsumexp(logits, axes=(1,)) - ops.summation(logits * y_one_hot, axes=(1,))
+        return ops.summation(losses) / logits.shape[0]
         ### END YOUR SOLUTION
 
 
@@ -151,14 +157,34 @@ class BatchNorm1d(Module):
         self.eps = eps
         self.momentum = momentum
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, device=device, dtype=dtype))
+        self.running_mean = init.zeros(dim, device=device, dtype=dtype)
+        self.running_var = init.ones(dim, device=device, dtype=dtype)
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if self.training:
+            mean = ops.summation(x, axes=(0,)) / x.shape[0]
+            mean_b = ops.broadcast_to(ops.reshape(mean, (1, self.dim)), x.shape)
+            centered = x - mean_b
+            var = ops.summation(centered * centered, axes=(0,)) / x.shape[0]
 
+            self.running_mean.data = (1 - self.momentum) * self.running_mean + self.momentum * mean
+            self.running_var.data = (1 - self.momentum) * self.running_var + self.momentum * var
+        else:
+            mean = self.running_mean
+            var = self.running_var
+            mean_b = ops.broadcast_to(ops.reshape(mean, (1, self.dim)), x.shape)
+            centered = x - mean_b
+
+        var_b = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape)
+        norm = centered / ((var_b + self.eps) ** 0.5)
+        weight_b = ops.broadcast_to(ops.reshape(self.weight, (1, self.dim)), x.shape)
+        bias_b = ops.broadcast_to(ops.reshape(self.bias, (1, self.dim)), x.shape)
+        return norm * weight_b + bias_b
+        ### END YOUR SOLUTION
 
 
 class LayerNorm1d(Module):
@@ -167,12 +193,21 @@ class LayerNorm1d(Module):
         self.dim = dim
         self.eps = eps
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, device=device, dtype=dtype))
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        mean = ops.summation(x, axes=(1,)) / self.dim
+        mean_b = ops.broadcast_to(ops.reshape(mean, (x.shape[0], 1)), x.shape)
+        centered = x - mean_b
+        var = ops.summation(centered * centered, axes=(1,)) / self.dim
+        var_b = ops.broadcast_to(ops.reshape(var, (x.shape[0], 1)), x.shape)
+        norm = centered / ((var_b + self.eps) ** 0.5)
+        weight_b = ops.broadcast_to(ops.reshape(self.weight, (1, self.dim)), x.shape)
+        bias_b = ops.broadcast_to(ops.reshape(self.bias, (1, self.dim)), x.shape)
+        return norm * weight_b + bias_b
         ### END YOUR SOLUTION
 
 
@@ -183,7 +218,11 @@ class Dropout(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if not self.training:
+            return x
+        keep_prob = 1 - self.p
+        mask = init.randb(*x.shape, p=keep_prob, device=x.device, requires_grad=False)
+        return x * mask / keep_prob
         ### END YOUR SOLUTION
 
 
@@ -194,5 +233,5 @@ class Residual(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.fn(x) + x
         ### END YOUR SOLUTION

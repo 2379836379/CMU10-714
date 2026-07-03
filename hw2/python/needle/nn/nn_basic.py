@@ -86,26 +86,41 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.weight = Parameter(init.kaiming_uniform(in_features, out_features, device=device, dtype=dtype))
+        if bias:
+            self.bias = Parameter(init.kaiming_uniform(out_features, 1, device=device, dtype=dtype).reshape((1, out_features)))
+        else:
+            self.bias = None
         ### END YOUR SOLUTION
 
     def forward(self, X: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        out = ops.matmul(X, self.weight)
+        if self.bias is not None:
+            out = out + ops.broadcast_to(self.bias, out.shape)
+        return out
         ### END YOUR SOLUTION
 
 
 class Flatten(Module):
     def forward(self, X: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # 获取输入张量的形状
+        batch_size = X.shape[0]  # 第一个维度是 batch size
+        # 计算剩余维度的元素总数
+        flatten_dim = 1
+        for dim in X.shape[1:]:
+            flatten_dim *= dim
+        # 将除 batch 维度外的所有维度展平
+        # 使用 reshape 操作：[batch, ...] -> [batch, flatten_dim]
+        return X.reshape((batch_size, flatten_dim))
         ### END YOUR SOLUTION
 
 
 class ReLU(Module):
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return ops.relu(x)
         ### END YOUR SOLUTION
 
 class Sequential(Module):
@@ -115,8 +130,11 @@ class Sequential(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        in_module = x
+        for module in self.modules:
+            in_module = module.forward(in_module)
         ### END YOUR SOLUTION
+        return in_module
 
 
 class SoftmaxLoss(Module):

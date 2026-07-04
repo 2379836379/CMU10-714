@@ -211,9 +211,15 @@ class AttentionLayer(Module):
         k = self.prenorm_k(k.reshape((batch_size * keys_values_len, k_dim))).reshape((batch_size, keys_values_len, k_dim))
         v = self.prenorm_v(v.reshape((batch_size * keys_values_len, v_dim))).reshape((batch_size, keys_values_len, v_dim))
 
-        q = self.q_projection(q).reshape((batch_size, queries_len, self.num_head, self.dim_head))
-        k = self.k_projection(k).reshape((batch_size, keys_values_len, self.num_head, self.dim_head))
-        v = self.v_projection(v).reshape((batch_size, keys_values_len, self.num_head, self.dim_head))
+        q = self.q_projection(q.reshape((batch_size * queries_len, q_dim))).reshape(
+            (batch_size, queries_len, self.num_head, self.dim_head)
+        )
+        k = self.k_projection(k.reshape((batch_size * keys_values_len, k_dim))).reshape(
+            (batch_size, keys_values_len, self.num_head, self.dim_head)
+        )
+        v = self.v_projection(v.reshape((batch_size * keys_values_len, v_dim))).reshape(
+            (batch_size, keys_values_len, self.num_head, self.dim_head)
+        )
 
         q = ops.transpose(q, axes=(1, 2))
         k = ops.transpose(k, axes=(1, 2))
@@ -221,8 +227,8 @@ class AttentionLayer(Module):
 
         result, _ = self.attn(q, k, v)
         result = ops.transpose(result, axes=(1, 2))
-        result = result.reshape((batch_size, queries_len, self.num_head * self.dim_head))
-        result = self.out_projection(result)
+        result = result.reshape((batch_size * queries_len, self.num_head * self.dim_head))
+        result = self.out_projection(result).reshape((batch_size, queries_len, self.out_features))
         ### END YOUR SOLUTION
 
         return result
@@ -340,7 +346,7 @@ class Transformer(Module):
         pos = Tensor(positions, device=x.device, dtype=x.dtype, requires_grad=False)
         pos_emb = self.pos_embedding(pos)
         pos_emb = ops.transpose(pos_emb, axes=(0, 1))
-        x = self.dropout(x + pos_emb)
+        x = x + pos_emb
         for layer in self.layers:
             x = layer(x)
         ### END YOUR SOLUTION

@@ -127,6 +127,11 @@ class ReLU(Module):
         ### END YOUR SOLUTION
 
 
+class Tanh(Module):
+    def forward(self, x: Tensor) -> Tensor:
+        return ops.tanh(x)
+
+
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
         super().__init__()
@@ -235,3 +240,13 @@ class Residual(Module):
         ### BEGIN YOUR SOLUTION
         return self.fn(x) + x
         ### END YOUR SOLUTION
+
+
+class BatchNorm2d(BatchNorm1d):
+    def forward(self, x: Tensor) -> Tensor:
+        n, c, h, w = x.shape
+        y = x.transpose((1, 2)).transpose((2, 3))
+        y = y.reshape((n * h * w, c))
+        y = super().forward(y)
+        y = y.reshape((n, h, w, c))
+        return y.transpose((2, 3)).transpose((1, 2))

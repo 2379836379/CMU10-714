@@ -1,31 +1,24 @@
-from typing import Optional, Any, Union
-from ..autograd import NDArray
-from ..autograd import Op, Tensor, Value, TensorOp
-from ..autograd import TensorTuple, TensorTupleOp
+from typing import Optional
+import numpy as np
 
+from ..autograd import NDArray
+from ..autograd import Tensor, TensorOp
 from .ops_mathematic import *
 
-import numpy as array_api
 
 class LogSoftmax(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
-        ### BEGIN YOUR SOLUTION
-        max_z = array_api.max(Z, axis=-1, keepdims=True)
-        shifted = Z - max_z
-        logsumexp = array_api.log(
-            array_api.sum(array_api.exp(shifted), axis=-1, keepdims=True)
-        )
-        return shifted - logsumexp
-        ### END YOUR SOLUTION
+        arr = Z if isinstance(Z, np.ndarray) else Z.numpy()
+        shifted = arr - np.max(arr, axis=-1, keepdims=True)
+        out = shifted - np.log(np.sum(np.exp(shifted), axis=-1, keepdims=True))
+        return out if isinstance(Z, np.ndarray) else type(Z)(out.astype(np.float32), device=Z.device)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        ### BEGIN YOUR SOLUTION
         softmax = exp(node)
         summed = summation(out_grad, axes=(-1,))
         summed = reshape(summed, (*out_grad.shape[:-1], 1))
         summed = broadcast_to(summed, out_grad.shape)
         return out_grad - softmax * summed
-        ### END YOUR SOLUTION
 
 
 def logsoftmax(a: Tensor) -> Tensor:
@@ -37,29 +30,20 @@ class LogSumExp(TensorOp):
         self.axes = axes
 
     def compute(self, Z: NDArray) -> NDArray:
-        ### BEGIN YOUR SOLUTION
+        arr = Z if isinstance(Z, np.ndarray) else Z.numpy()
         axes = self.axes
         if isinstance(axes, int):
             axes = (axes,)
-
-        max_z = array_api.max(Z, axis=axes, keepdims=True)
-        shifted = Z - max_z
-        res = array_api.log(
-            array_api.sum(array_api.exp(shifted), axis=axes, keepdims=True)
-        ) + max_z
-
-        if axes is None:
-            return array_api.squeeze(res)
-        return array_api.squeeze(res, axis=axes)
-        ### END YOUR SOLUTION
+        max_z = np.max(arr, axis=axes, keepdims=True)
+        res = np.log(np.sum(np.exp(arr - max_z), axis=axes, keepdims=True)) + max_z
+        out = np.squeeze(res) if axes is None else np.squeeze(res, axis=axes)
+        return out if isinstance(Z, np.ndarray) else type(Z)(out.astype(np.float32), device=Z.device)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        ### BEGIN YOUR SOLUTION
         Z = node.inputs[0]
         axes = self.axes
         if isinstance(axes, int):
             axes = (axes,)
-
         if axes is None:
             reshape_shape = (1,) * len(Z.shape)
         else:
@@ -68,13 +52,9 @@ class LogSumExp(TensorOp):
             for axis in axes:
                 reshape_shape[axis] = 1
             reshape_shape = tuple(reshape_shape)
-
-        node_reshaped = reshape(node, reshape_shape)
-        out_grad_reshaped = reshape(out_grad, reshape_shape)
-        node_broadcast = broadcast_to(node_reshaped, Z.shape)
-        out_grad_broadcast = broadcast_to(out_grad_reshaped, Z.shape)
-        return exp(Z - node_broadcast) * out_grad_broadcast
-        ### END YOUR SOLUTION
+        node_b = broadcast_to(reshape(node, reshape_shape), Z.shape)
+        out_b = broadcast_to(reshape(out_grad, reshape_shape), Z.shape)
+        return exp(Z - node_b) * out_b
 
 
 def logsumexp(a: Tensor, axes: Optional[tuple] = None) -> Tensor:

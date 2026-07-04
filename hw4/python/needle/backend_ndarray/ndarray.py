@@ -448,6 +448,10 @@ class NDArray:
                 view._offset,
             )
 
+    def pad(self, axes):
+        out = np.pad(self.numpy(), axes)
+        return NDArray(out, device=self.device)
+
     ### Collection of elementwise and scalar function: add, multiply, boolean, etc
 
     def ewise_or_scalar(
